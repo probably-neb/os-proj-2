@@ -1,0 +1,7 @@
+util.o
+tid.o
+stacks.o
+snakes64.o
+rr.o
+magic64.o
+lwp.o
