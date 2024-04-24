@@ -4,11 +4,14 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "lwp.h"
 
 #define RR_INITIAL_CAP 16
 #define RR_REALLOC_FACTOR 2
+
+#define dbg(...) fprintf(stderr, __VA_ARGS__)
 
 struct __rr_globals_st {
     // the length of the threads array
@@ -102,9 +105,9 @@ thread rr_next(void) {
     }
 
     thread t = NULL;
-    uint64_t i = __rr_globals.i;
+    uint64_t i = __rr_globals.i + 1;
 
-
+    // dbg("rr_next: i=%lu, len=%lu\n", i, __rr_globals.len);
     for (; i < __rr_globals.len; i++) {
         t = __rr_globals.threads[i];
         if (t == NULL) {
@@ -136,6 +139,7 @@ thread rr_next(void) {
     t = NULL;
 
 postamble:
+    // dbg("rr_next: t=%p, i=%lu\n", t, i);
     __rr_globals.i = i;
     return t;
 }

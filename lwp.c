@@ -190,6 +190,14 @@ void thread_mark_terminated(thread t, thread_status_t status) {
     t->status = MKTERMSTAT(LWP_TERM, status);
 }
 
+uint64_t thread_get_stack_len(thread t) {
+    if (t == NULL) {
+        return 0;
+    }
+    uint64_t stack_size = t->stacksize;
+    return stack_size / sizeof(stack);
+}
+
 /**
  * wraps calling the lwpfun so that if they return an exit status without
  * calling lwp_exit, we call lwp_exit for them with the returned status.
@@ -203,11 +211,12 @@ static void lwp_wrap(lwpfun fun, void *arg) {
 }
 
 /**
- * Return a pointer to the next 16 byte aligned entry in the stack
+ * Return a pointer to the **previous** 16 byte aligned entry in the stack
+ * previous because this is used to align stack frames, and the stack grows downward
  */
-stack* next_16b_aligned_ptr(const stack* s) {
+stack* prev_16b_aligned_ptr(const stack* s) {
     unsigned long s_ul = (unsigned long)s;
-    unsigned long aligned_s = s_ul + (16 - (s_ul % 16));
+    unsigned long aligned_s = s_ul - (s_ul % 16);
     assert(aligned_s % 16 == 0);
     assert(sizeof(unsigned long) == sizeof(stack*));
     return (stack*)(aligned_s);
@@ -238,11 +247,17 @@ void thread_init_shim_rfile(thread t, lwpfun fun, void* arg) {
     if (t == NULL) {
         return;
     }
-    stack* lwp_wrap_stack_base = next_16b_aligned_ptr(t->stack);
+    uint64_t stack_len = thread_get_stack_len(t);
+    stack* lwp_wrap_stack_base = prev_16b_aligned_ptr(&t->stack[stack_len - 1]);
+    // stack* lwp_wrap_stack_base = prev_16b_aligned_ptr(&t->stack[4]);
+
+    assert(lwp_wrap_stack_base != NULL);
+    assert((uint64_t)lwp_wrap_stack_base % 16 == 0);
 
     // the pointer to the stack frame of the dummy function `swap_rfiles` will
-    // tear down with room for the two values that `leave` will pop off the stack
-    stack* dummy_frame_stack_base = next_16b_aligned_ptr(&lwp_wrap_stack_base[1]);
+    // tear down with room for the two values (and some change)
+    // that `leave` will pop off the stack
+    stack* dummy_frame_stack_base = prev_16b_aligned_ptr(&lwp_wrap_stack_base[-2]);
 
     // movq %rbp, %rsp ; copy base pointer to stack pointer
     // in order for stack pointer to be setup by swap_rfiles, %rbp must be set
@@ -255,7 +270,7 @@ void thread_init_shim_rfile(thread t, lwpfun fun, void* arg) {
     dummy_frame_stack_base[0] = (unsigned long)lwp_wrap_stack_base;
     // popq %rip ; pop the stack into the instruction pointer
     // set the ip popped off the stack to the address of `lwp_wrap`
-    dummy_frame_stack_base[-1] = (unsigned long)lwp_wrap;
+    dummy_frame_stack_base[1] = (unsigned long)lwp_wrap;
 
     // set the first argument to lwp_wrap to be lwpfun
     t->state.rdi = (unsigned long)fun;
@@ -296,6 +311,7 @@ void lwp_start(void) {
     s->admit(t);
     // save current register values in t->state
     swap_rfiles(&t->state, NULL);
+
     lwp_cur_tid = t->tid;
     lwp_yield();
 }
@@ -322,7 +338,7 @@ void lwp_yield(void) {
         exit(1);
     }
     if (cur->tid == next->tid) {
-        fprintf(stderr, "lwp_yield: next is cur\n");
+        fprintf(stderr, "lwp_yield: next (%lu) is cur (%lu)\n", cur->tid, next->tid);
         exit(1);
     }
     dbg("lwp_yield: switching from %lu to %lu\n", cur->tid, next->tid);
