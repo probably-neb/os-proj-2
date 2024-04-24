@@ -1,10 +1,10 @@
 CC 	= gcc
 
-CFLAGS  = -Wall -g -I .
+CFLAGS  = -Wall -g -I . -I include -I lib64
 
 LD 	= gcc
 
-LDFLAGS  = -Wall -g 
+LDFLAGS  = -Wall -g -L lib64
 
 PROGS	= snakes nums hungry
 
@@ -20,36 +20,48 @@ SRCS	= randomsnakes.c numbersmain.c hungrysnakes.c
 
 HDRS	= 
 
-EXTRACLEAN = core $(PROGS) *.o
+EXTRACLEAN = core $(PROGS)
 
 all: 	$(PROGS)
 
 allclean: clean
-	@rm -f $(EXTRACLEAN)
+	@rm -f $(EXTRACLEAN) *.o *.a
 
 clean:
 	rm -f $(OBJS) *~ TAGS
 
-snakes: randomsnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o snakes randomsnakes.o -L. -lncurses -lsnakes -lLWP
+snakes: randomsnakes.o libLWP.a lib64/libsnakes.so
+	$(CC) $(LDFLAGS) $(CFLAGS) -o snakes randomsnakes.o -L. -lncurses -lsnakes -lLWP
 
-hungry: hungrysnakes.o libLWP.a libsnakes.a
-	$(LD) $(LDFLAGS) -o hungry hungrysnakes.o -L. -lncurses -lsnakes -lLWP
+hungry: hungrysnakes.o libLWP.a lib64/libsnakes.so
+	$(CC) $(LDFLAGS) $(CFLAGS) -o hungry hungrysnakes.o -L. -lncurses -lsnakes -lLWP
 
-nums: numbersmain.o libLWP.a 
-	$(LD) $(LDFLAGS) -o nums numbersmain.o -L. -lLWP
+nums: numbersmain.o libLWP.a
+	$(CC) $(LDFLAGS) $(CFLAGS) -o nums numbersmain.o -L. -lLWP
 
-hungrysnakes.o: lwp.h snakes.h
+hungrysnakes.o: lwp.h include/snakes.h
+	$(CC) $(LDFLAGS) $(CFLAGS) -fPIE -c demos/hungrysnakes.c
 
-randomsnakes.o: lwp.h snakes.h
+randomsnakes.o: lwp.h include/snakes.h
+	$(CC) $(LDFLAGS) $(CFLAGS) -fPIE -c demos/randomsnakes.c
 
-numbermain.o: lwp.h
+numbersmain.o: lwp.h
+	$(CC) $(LDFLAGS) $(CFLAGS) -fPIE -c demos/numbersmain.c
 
-libLWP.a: lwp.c rr.c util.c
-	gcc -c rr.c util.c lwp.c magic64.S 
+libLWP.a: lwp.c rr.c demos/util.c
+	$(CC) $(CFLAGS) -c rr.c demos/util.c lwp.c lib64/magic64.S
 	ar r libLWP.a util.o lwp.o rr.o magic64.o
 	rm lwp.o
 
 submission: lwp.c rr.c util.c Makefile README
 	tar -cf project2_submission.tar lwp.c rr.c Makefile README
 	gzip project2_submission.tar
+
+rs: snakes
+	(export LD_LIBRARY_PATH=lib64; ./snakes)
+
+hs: hungry
+	(export LD_LIBRARY_PATH=lib64; ./hungry)
+
+ns: nums
+	(export LD_LIBRARY_PATH=lib64; ./nums)

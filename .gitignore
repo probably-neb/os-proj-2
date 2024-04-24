@@ -1,7 +1,10 @@
-util.o
-tid.o
-stacks.o
-snakes64.o
-rr.o
-magic64.o
-lwp.o
+*.o
+.ccls-cache
+.idea
+snakes
+nums
+hungry
+demos/nums
+demos/snakes
+demos/hungry
+vgcore*
