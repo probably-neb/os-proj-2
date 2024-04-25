@@ -323,6 +323,8 @@ int thread_get_status(thread t) {
     return LWPTERMSTAT(t->status);
 }
 
+// FIXME: snakes demos are failing in snakes code
+// with a segmentation fault
 void lwp_yield(void) {
     scheduler s = lwp_get_scheduler();
     thread next = s->next();
